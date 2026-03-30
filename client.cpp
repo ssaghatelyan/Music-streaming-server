@@ -1,96 +1,123 @@
-#include <iostream>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <cstring>
+#include "header.hpp"
+#include <termios.h>
 
-#define PORT 1234
-#define BUFFER 4096
+std::string getPassword() {
+    std::string password;
 
-int main()
-{
+    termios oldt, newt;
+    tcgetattr(STDIN_FILENO, &oldt);
+
+    newt = oldt;
+    newt.c_lflag &= ~ECHO;
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    std::cin >> password;
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    std::cout << std::endl;
+
+    return password;
+}
+
+std::string recvAll(int sock) {
+    char buffer[1024];
+    int bytes = recv(sock, buffer, sizeof(buffer) - 1, 0);
+
+    if (bytes <= 0)
+        return "ERROR";
+
+    return std::string(buffer, bytes);
+}
+
+int main() {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
-    sockaddr_in serv{};
-    serv.sin_family = AF_INET;
-    serv.sin_port = htons(PORT);
-    inet_pton(AF_INET, "127.0.0.1", &serv.sin_addr);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(PORT);
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    connect(sock, (sockaddr*)&serv, sizeof(serv));
+    connect(sock, (sockaddr*)&addr, sizeof(addr));
 
-    std::cout << "1 LOGIN\n2 SIGNUP\n";
-    int choice;
-    std::cin >> choice;
+    bool loggedIn = false;
 
-    char user[50], pass[50];
+    while (true) {
+        if (!loggedIn) {
+            std::cout << "\n1. Login\n2. Signup\n3. Exit\nChoose: ";
 
-    std::cout << "Username: ";
-    std::cin >> user;
+            int c;
+            std::cin >> c;
 
-    std::cout << "Password: ";
-    std::cin >> pass;
+            if (c == 3) break;
 
-    char buffer[BUFFER];
+            std::string u, p;
+            std::cout << "Username: ";
+            std::cin >> u;
 
-    if (choice == 2)
-    {
-        send(sock, "SIGNUP", 6, 0);
+            std::cout << "Password: ";
+            p = getPassword();
 
-        sprintf(buffer, "%s %s", user, pass);
-        send(sock, buffer, strlen(buffer), 0);
+            std::string cmd = (c == 1 ? "login " : "signup ") + u + " " + p + "\n";
 
-        recv(sock, buffer, BUFFER, 0);
-        std::cout << buffer << std::endl;
-        return 0;
-    }
+            send(sock, cmd.c_str(), cmd.size(), 0);
 
-    send(sock, "LOGIN", 5, 0);
+            std::string res = recvAll(sock);
 
-    sprintf(buffer, "%s %s", user, pass);
-    send(sock, buffer, strlen(buffer), 0);
+            std::cout << "Server: " << res;
 
-    recv(sock, buffer, BUFFER, 0);
-
-    if (strncmp(buffer, "LOGIN_OK", 8) != 0)
-    {
-        std::cout << "Login failed\n";
-        return 0;
-    }
-
-    std::cout << "1 PLAY\n2 DOWNLOAD\n";
-    std::cin >> choice;
-
-    if (choice == 1)
-        send(sock, "PLAY", 4, 0);
-    else
-        send(sock, "DOWNLOAD", 8, 0);
-
-    int bytes;
-
-    if (choice == 1)
-    {
-        FILE* player = popen("mpg123 -", "w");
-
-        while ((bytes = recv(sock, buffer, BUFFER, 0)) > 0)
-        {
-            fwrite(buffer, 1, bytes, player);
+            if (res.find("LOGIN_OK") != std::string::npos)
+                loggedIn = true;
         }
+        else {
+            std::cout << "\n=== MUSIC MENU ===\n";
+            std::cout << "1. List songs\n";
+            std::cout << "2. Play song\n";
+            std::cout << "3. Logout\n";
+            std::cout << "Choose: ";
 
-        pclose(player);
-    }
-    else
-    {
-        int file = open("song.mp3",
-                        O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            int c;
+            std::cin >> c;
 
-        while ((bytes = recv(sock, buffer, BUFFER, 0)) > 0)
-        {
-            write(file, buffer, bytes);
+            if (c == 3) {
+                loggedIn = false;
+                continue;
+            }
+
+            if (c == 1) {
+                std::string cmd = "list\n";
+                send(sock, cmd.c_str(), cmd.size(), 0);
+
+                std::cout << recvAll(sock);
+            }
+
+            else if (c == 2) {
+                std::string song;
+                std::cout << "Enter song name: ";
+                std::cin >> song;
+
+                std::string cmd = "play " + song + "\n";
+                send(sock, cmd.c_str(), cmd.size(), 0);
+
+                std::ofstream file("temp.mp3", std::ios::binary);
+
+                char buffer[1024];
+                int bytes;
+
+                while ((bytes = recv(sock, buffer, sizeof(buffer), 0)) > 0) {
+                    file.write(buffer, bytes);
+
+                    if (bytes < 1024)
+                        break;
+                }
+
+                file.close();
+
+                system("start temp.mp3"); // Windows
+            }
         }
-
-        close(file);
-        std::cout << "Downloaded\n";
     }
 
     close(sock);
+    return 0;
 }

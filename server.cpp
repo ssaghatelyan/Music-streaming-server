@@ -1,64 +1,28 @@
-#include <iostream>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/sendfile.h>
-#include <cstring>
-#include <fstream>
+#include "header.hpp"
 
-#define PORT 1234
-#define BUFFER 4096
+#include <dirent.h>
 
-bool login(std::string user, std::string pass)
-{
-    std::ifstream file("users.txt");
-    std::string u, p;
+std::string getSongsList() {
+    DIR* dir = opendir("songs");
+    if (!dir) return "NO_FOLDER\n";
 
-    while (file >> u >> p)
-    {
-        if (u == user && p == pass)
-            return true;
-    }
-    return false;
-}
+    struct dirent* entry;
+    std::string list = "";
 
-bool signup(std::string user, std::string pass)
-{
-    std::ofstream file("users.txt", std::ios::app);
-    file << user << " " << pass << std::endl;
-    return true;
-}
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string name = entry->d_name;
 
-void play_file(int client)
-{
-    int fd = open("song.mp3", O_RDONLY);
-    char buffer[BUFFER];
-    int bytes;
+        if (name == "." || name == "..")
+            continue;
 
-    while ((bytes = read(fd, buffer, BUFFER)) > 0)
-    {
-        send(client, buffer, bytes, 0);
+        list += name + "\n";
     }
 
-    close(fd);
+    closedir(dir);
+    return list;
 }
 
-void download_file(int client)
-{
-    int fd = open("song.mp3", O_RDONLY);
-
-    struct stat st;
-    fstat(fd, &st);
-
-    off_t offset = 0;
-    sendfile(client, fd, &offset, st.st_size);
-
-    close(fd);
-}
-
-int main()
-{
+int main() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     sockaddr_in addr{};
@@ -69,48 +33,61 @@ int main()
     bind(server_fd, (sockaddr*)&addr, sizeof(addr));
     listen(server_fd, 5);
 
-    std::cout << "Server started\n";
+    std::cout << "Server started...\n";
 
-    while (true)
-    {
+    Auth auth("users.db");
+
+    while (true) {
         int client = accept(server_fd, nullptr, nullptr);
 
-        char buffer[BUFFER] = {0};
-        read(client, buffer, BUFFER);
+        while (true) {
+            char buffer[1024] = {0};
+            int bytes = recv(client, buffer, sizeof(buffer) - 1, 0);
 
-        std::string command(buffer);
+            if (bytes <= 0)
+                break;
 
-        if (command.find("SIGNUP") != std::string::npos)
-        {
-            std::string user, pass;
-            read(client, buffer, BUFFER);
-            sscanf(buffer, "%s %s", &user[0], &pass[0]);
+            std::string cmd(buffer, bytes);
 
-            signup(user, pass);
-            send(client, "Signup OK", 9, 0);
-        }
+            std::stringstream ss(cmd);
+            std::string action, user, pass;
 
-        if (command.find("LOGIN") != std::string::npos)
-        {
-            char user[50], pass[50];
-            read(client, buffer, BUFFER);
-            sscanf(buffer, "%s %s", user, pass);
+            ss >> action >> user >> pass;
 
-            if (login(user, pass))
-            {
-                send(client, "LOGIN_OK", 8, 0);
+            std::string response = "UNKNOWN";
 
-                read(client, buffer, BUFFER);
+            if (action == "signup")
+                response = auth.signup(user, pass);
 
-                if (strncmp(buffer, "PLAY", 4) == 0)
-                    play_file(client);
-                else if (strncmp(buffer, "DOWNLOAD", 8) == 0)
-                    download_file(client);
+            else if (action == "login")
+                response = auth.login(user, pass);
+
+            else if (action == "list") {
+                response = getSongsList();
             }
-            else
-            {
-                send(client, "LOGIN_FAIL", 10, 0);
+
+            else if (action == "play") {
+                std::string path = "songs/" + user;
+
+                std::ifstream file(path, std::ios::binary);
+
+                if (!file) {
+                    std::string err = "FILE_NOT_FOUND\n";
+                    send(client, err.c_str(), err.size(), 0);
+                    continue;
+                }
+
+                char buf[1024];
+                while (file.read(buf, sizeof(buf))) {
+                    send(client, buf, sizeof(buf), 0);
+                }
+
+                send(client, buf, file.gcount(), 0);
+                continue;
             }
+
+            response += "\n";
+            send(client, response.c_str(), response.size(), 0);
         }
 
         close(client);
