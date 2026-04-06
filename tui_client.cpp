@@ -1,7 +1,3 @@
-// tui_client.cpp
-// Build: g++ -o tui_client tui_client.cpp -lncurses
-// Run:   ./tui_client
-
 #include <ncurses.h>
 #include <string>
 #include <vector>
@@ -12,8 +8,6 @@
 
 #define PORT 8080
 #define IP   "127.0.0.1"
-
-// ── Сеть ──────────────────────────────────────────────────────────────────────
 
 int g_sock;
 
@@ -29,8 +23,6 @@ std::string net_recv_string() {
     recv(g_sock, &s[0], len, MSG_WAITALL);
     return s;
 }
-
-// ── Утилиты ncurses ───────────────────────────────────────────────────────────
 
 void print_center(int y, const std::string& s) {
     mvprintw(y, (COLS - s.size()) / 2, "%s", s.c_str());
@@ -51,8 +43,6 @@ void status(const std::string& msg, int color) {
     attroff(COLOR_PAIR(color) | A_BOLD);
     refresh();
 }
-
-// ── Экран авторизации ─────────────────────────────────────────────────────────
 
 std::string screen_auth() {
     clear(); box(stdscr, 0, 0);
@@ -91,8 +81,6 @@ std::string screen_auth() {
     return "";
 }
 
-// ── Скачать/стримить файл ─────────────────────────────────────────────────────
-
 bool download_song(const std::string& song, const std::string& path) {
     net_send("play " + song);
     size_t file_size = 0;
@@ -114,8 +102,6 @@ bool download_song(const std::string& song, const std::string& path) {
     }
     return got >= file_size;
 }
-
-// ── Главное меню ──────────────────────────────────────────────────────────────
 
 void screen_main(const std::string& username) {
     std::vector<std::string> playlist;
@@ -203,8 +189,6 @@ void screen_main(const std::string& username) {
         else if (ch == 'q') { endwin(); exit(0); }
     }
 }
-
-// ── main ──────────────────────────────────────────────────────────────────────
 
 int main() {
     g_sock = socket(AF_INET, SOCK_STREAM, 0);
