@@ -162,6 +162,7 @@ int main() {
     bool logged = false;
     std::vector<std::string> playlist;
 
+
     while (true) {
         if (!logged) {
             std::cout << "1 Login\n2 Signup\n3 Exit\n";

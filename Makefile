@@ -1,6 +1,10 @@
 SERVER  = server
 CLIENT  = client
 TUI     = tui_client
+
+GUI_DIR = gui
+GUI_BIN = $(GUI_DIR)/build/client
+
 CXX      = g++
 CXXFLAGS = -Wall -Wextra -Werror
 LDFLAGS  = -pthread
@@ -24,11 +28,17 @@ $(CLIENT): $(OBJ_CLIENT)
 $(TUI): $(OBJ_TUI)
 	$(CXX) $(CXXFLAGS) $(OBJ_TUI) -o $(TUI) -lncurses
 
+gui:
+	cmake -B $(GUI_DIR)/build -S $(GUI_DIR) -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(GUI_DIR)/build --parallel
+
 clean:
 	rm -f $(OBJ_SERVER) $(OBJ_CLIENT) $(OBJ_TUI)
+	rm -rf $(GUI_DIR)/build
 
 fclean: clean
 	rm -f $(SERVER) $(CLIENT) $(TUI)
 
 re: fclean all
-.PHONY: all clean fclean re
+
+.PHONY: all gui clean fclean re

@@ -24,6 +24,7 @@ std::string hashPassword(const std::string& pass) {
         hash ^= c;
         hash *= 1099511628211ULL;
     }
+
     hash ^= 0xDEADBEEFCAFEBABEULL;
     hash *= 1099511628211ULL;
     return std::to_string(hash);
@@ -87,6 +88,7 @@ bool isSafeFilename(const std::string& name) {
 }
 
 void sendSong(int client, const std::string& name) {
+
     if (!isSafeFilename(name)) {
         size_t err = 0;
         sendAll(client, &err, sizeof(err));
@@ -136,6 +138,7 @@ void handleClient(int client) {
     bool logged = false;
 
     while (true) {
+
         std::string line = recvLine(client);
         if (line.empty()) break;
 
@@ -163,6 +166,7 @@ void handleClient(int client) {
         }
 
         else if (cmd == "list") {
+
             DIR* dir = opendir("songs");
             if (!dir) {
                 sendString(client, "(no songs directory)\n");
@@ -199,6 +203,10 @@ int main() {
 
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 
+<<<<<<< HEAD
+=======
+    // FIX #7: SO_REUSEADDR — чтобы порт не зависал после перезапуска
+>>>>>>> 27b798c (.)
     int opt = 1;
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
@@ -215,6 +223,11 @@ int main() {
     while (true) {
         int client = accept(serverSocket, NULL, NULL);
         if (client < 0) continue;
+<<<<<<< HEAD
+=======
+
+        // FIX #3: Запускаем клиента в отдельном потоке
+>>>>>>> 27b798c (.)
         std::thread(handleClient, client).detach();
     }
 }
